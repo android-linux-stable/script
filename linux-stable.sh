@@ -2,7 +2,7 @@
 #
 # Pull in linux-stable updates to a kernel tree
 #
-# Copyright (C) 2017 Nathan Chancellor
+# Copyright (C) 2017-2018 Nathan Chancellor
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -39,18 +39,20 @@ function header() {
     else
         COLOR=${RED}
     fi
-    echo ${COLOR}
+    echo "${COLOR}"
+    # shellcheck disable=SC2034
     echo "====$(for i in $(seq ${#1}); do echo "=\c"; done)===="
     echo "==  ${1}  =="
+    # shellcheck disable=SC2034
     echo "====$(for i in $(seq ${#1}); do echo "=\c"; done)===="
-    echo ${RST}
+    echo "${RST}"
 }
 
 
 # Prints an error in bold red
 function report_error() {
     echo
-    echo ${RED}${1}${RST}
+    echo "${RED}${1}${RST}"
     if [[ ${2} = "-h" ]]; then
         ${0} -h
     fi
@@ -61,7 +63,7 @@ function report_error() {
 # Prints a warning in bold yellow
 function report_warning() {
     echo
-    echo ${YLW}${1}${RST}
+    echo "${YLW}${1}${RST}"
     if [[ -z ${2} ]]; then
         echo
     fi
@@ -82,7 +84,7 @@ function parse_parameters() {
             # Help menu
             "-h"|"--help")
                 echo
-                echo "${BOLD}Command:${RST} ./$(basename ${0}) <options>"
+                echo "${BOLD}Command:${RST} ./$(basename "${0}") <options>"
                 echo
                 echo "${BOLD}Script description:${RST} Merges/cherry-picks Linux upstream into a kernel tree"
                 echo
@@ -132,7 +134,7 @@ function parse_parameters() {
                 UPDATE_METHOD=merge ;;
 
             # Print the latest version from kernel.org
-            "-p"|"--latest")
+            "-p"|"--print-latest")
                 PRINT_LATEST=true ;;
 
             # Update to the specified version
@@ -177,11 +179,9 @@ function update_remote() {
     header "Updating linux-stable"
 
     # Add remote if it isn't already present
-    cd ${KERNEL_FOLDER}
+    cd "${KERNEL_FOLDER}" || report_error "Could not change into ${KERNEL_FOLDER}!"
 
-    git fetch --tags https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/
-
-    if [[ $? -ne 0 ]]; then
+    if ! git fetch --tags https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/; then
         report_error "linux-stable update failed!"
     else
         echo "linux-stable updated successfully!"
@@ -201,13 +201,13 @@ function generate_versions() {
     # Full kernel version
     CURRENT_VERSION=$(make kernelversion)
     # First two numbers (3.4 | 3.10 | 3.18 | 4.4)
-    CURRENT_MAJOR_VERSION=$(echo ${CURRENT_VERSION} | cut -f 1,2 -d .)
+    CURRENT_MAJOR_VERSION=$(echo "${CURRENT_VERSION}" | cut -f 1,2 -d .)
     # Last number
-    CURRENT_SUBLEVEL=$(echo ${CURRENT_VERSION} | cut -d . -f 3)
+    CURRENT_SUBLEVEL=$(echo "${CURRENT_VERSION}" | cut -d . -f 3)
 
     # Get latest update from upstream
-    LATEST_VERSION=$(git tag --sort=-taggerdate -l v${CURRENT_MAJOR_VERSION}* | head -n 1 | sed s/v//)
-    LATEST_SUBLEVEL=$(echo ${LATEST_VERSION} | cut -d . -f 3)
+    LATEST_VERSION=$(git tag --sort=-taggerdate -l v"${CURRENT_MAJOR_VERSION}"* | head -n 1 | sed s/v//)
+    LATEST_SUBLEVEL=$(echo "${LATEST_VERSION}" | cut -d . -f 3)
 
     # Print the current/latest version and exit if requested
     echo "${BOLD}Current kernel version:${RST} ${CURRENT_VERSION}"
@@ -223,14 +223,14 @@ function generate_versions() {
     # 1. Update to the latest version
     case ${UPDATE_MODE} in
         0)
-            TARGET_SUBLEVEL=$((${CURRENT_SUBLEVEL} + 1))
+            TARGET_SUBLEVEL=$((CURRENT_SUBLEVEL + 1))
             TARGET_VERSION=${CURRENT_MAJOR_VERSION}.${TARGET_SUBLEVEL} ;;
         1)
             TARGET_VERSION=${LATEST_VERSION} ;;
     esac
 
     # Make sure target version is between current version and latest version
-    TARGET_SUBLEVEL=$(echo ${TARGET_VERSION} | cut -d . -f 3)
+    TARGET_SUBLEVEL=$(echo "${TARGET_VERSION}" | cut -d . -f 3)
     if [[ ${TARGET_SUBLEVEL} -le ${CURRENT_SUBLEVEL} ]]; then
         report_error "${TARGET_VERSION} is already present in ${CURRENT_VERSION}!\n"
     elif [[ ${TARGET_SUBLEVEL} -gt ${LATEST_SUBLEVEL} ]]; then
@@ -248,29 +248,27 @@ function generate_versions() {
 function update_to_target_version() {
     case ${UPDATE_METHOD} in
         "cherry-pick")
-            git cherry-pick ${RANGE}
-            if [[ $? -ne 0 ]]; then
+            if ! git cherry-pick "${RANGE}"; then
                 report_error "Cherry-pick needs manual intervention! Resolve conflicts then run:
 
 git add . && git cherry-pick --continue"
             else
-                header "${TARGET_VERSION} PICKED CLEANLY!" ${GRN}
+                header "${TARGET_VERSION} PICKED CLEANLY!" "${GRN}"
             fi ;;
 
         "merge")
-            GIT_MERGE_VERBOSITY=1 git merge --no-edit v${TARGET_VERSION}
-            if [[ $? -ne 0 ]]; then
+            if ! GIT_MERGE_VERBOSITY=1 git merge --no-edit v"${TARGET_VERSION}"; then
                 report_error "Merge needs manual intervention!
 
 Resolve conflicts then run git merge --continue!"
             else
-                header "${TARGET_VERSION} MERGED CLEANLY!" ${GRN}
+                header "${TARGET_VERSION} MERGED CLEANLY!" "${GRN}"
             fi ;;
     esac
 }
 
 
-parse_parameters $@
+parse_parameters "$@"
 update_remote
 generate_versions
 update_to_target_version
