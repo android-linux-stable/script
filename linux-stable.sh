@@ -50,24 +50,29 @@ function header() {
 
 
 # Prints an error in bold red
-function report_error() {
+function die() {
     echo
     echo "${RED}${1}${RST}"
-    if [[ ${2} = "-h" ]]; then
-        ${0} -h
-    fi
+    [[ ${2} = "-h" ]] && ${0} -h
     exit 1
 }
 
 
+# Prints a statement in bold green
+function success() {
+    echo
+    echo "${GRN}${1}${RST}"
+    [[ -z ${2} ]] && echo
+}
+
+
 # Prints a warning in bold yellow
-function report_warning() {
+function warn() {
     echo
     echo "${YLW}${1}${RST}"
-    if [[ -z ${2} ]]; then
-        echo
-    fi
+    [[ -z ${2} ]] && echo
 }
+
 
 # Parse the provided parameters
 function parse_parameters() {
@@ -119,9 +124,7 @@ function parse_parameters() {
             # Kernel source location
             "-k"|"--kernel-folder")
                 shift
-                if [[ $# -lt 1 ]]; then
-                    report_error "Please specify a kernel source location!!"
-                fi
+                [[ $# -lt 1 ]] && die "Please specify a kernel source location!"
 
                 KERNEL_FOLDER=${1} ;;
 
@@ -140,37 +143,27 @@ function parse_parameters() {
             # Update to the specified version
             "-v"|"--version")
                 shift
-                if [[ $# -lt 1 ]]; then
-                    report_error "Please specify a version to update!"
-                fi
+                [[ $# -lt 1 ]] && die "Please specify a version to update!"
 
                 TARGET_VERSION=${1} ;;
 
             *)
-                report_error "Invalid parameter!" ;;
+                die "Invalid parameter!" ;;
         esac
 
         shift
     done
 
     # If kernel source isn't specified, assume we're there
-    if [[ -z ${KERNEL_FOLDER} ]]; then
-        KERNEL_FOLDER=$(pwd)
-    fi
+    [[ -z ${KERNEL_FOLDER} ]] && KERNEL_FOLDER=$(pwd)
 
     # Sanity checks
-    if [[ ! ${UPDATE_METHOD} ]]; then
-        report_error "Neither cherry-pick nor merge were specified, please supply one!" -h
-    elif [[ ! -d ${KERNEL_FOLDER} ]]; then
-        report_error "Invalid kernel source location, folder does not exist!" -h
-    elif [[ ! -f ${KERNEL_FOLDER}/Makefile ]]; then
-        report_error "Invalid kernel source location, no Makefile present!" -h
-    fi
+    [[ ! ${UPDATE_METHOD} ]] && die "Neither cherry-pick nor merge were specified, please supply one!" -h
+    [[ ! -d ${KERNEL_FOLDER} ]] && die "Invalid kernel source location specified! Folder does not exist" -h
+    [[ ! -f ${KERNEL_FOLDER}/Makefile ]] && die "Invalid kernel source location specified! No Makefile present" -h
 
     # Default update mode is one version at a time
-    if [[ -z ${UPDATE_MODE} ]]; then
-        UPDATE_MODE=0
-    fi
+    [[ -z ${UPDATE_MODE} && -z ${TARGET_VERSION} ]] && UPDATE_MODE=0
 }
 
 
@@ -179,18 +172,15 @@ function update_remote() {
     header "Updating linux-stable"
 
     # Add remote if it isn't already present
-    cd "${KERNEL_FOLDER}" || report_error "Could not change into ${KERNEL_FOLDER}!"
+    cd "${KERNEL_FOLDER}" || die "Could not change into ${KERNEL_FOLDER}!"
 
-    if ! git fetch --tags https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/; then
-        report_error "linux-stable update failed!"
+    if git fetch --tags https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/; then
+        success "linux-stable updated successfully!"
     else
-        echo "linux-stable updated successfully!"
+        die "linux-stable update failed!"
     fi
 
-    if [[ ${FETCH_REMOTE_ONLY} ]]; then
-        echo
-        exit 0
-    fi
+    [[ ${FETCH_REMOTE_ONLY} ]] && exit 0
 }
 
 
@@ -206,7 +196,7 @@ function generate_versions() {
     CURRENT_SUBLEVEL=$(echo "${CURRENT_VERSION}" | cut -d . -f 3)
 
     # Get latest update from upstream
-    LATEST_VERSION=$(git tag --sort=-taggerdate -l v"${CURRENT_MAJOR_VERSION}"* | head -n 1 | sed s/v//)
+    LATEST_VERSION=$(git tag --sort=-taggerdate -l "v${CURRENT_MAJOR_VERSION}"* | head -n 1 | sed s/v//)
     LATEST_SUBLEVEL=$(echo "${LATEST_VERSION}" | cut -d . -f 3)
 
     # Print the current/latest version and exit if requested
@@ -231,11 +221,9 @@ function generate_versions() {
 
     # Make sure target version is between current version and latest version
     TARGET_SUBLEVEL=$(echo "${TARGET_VERSION}" | cut -d . -f 3)
-    if [[ ${TARGET_SUBLEVEL} -le ${CURRENT_SUBLEVEL} ]]; then
-        report_error "${TARGET_VERSION} is already present in ${CURRENT_VERSION}!\n"
-    elif [[ ${TARGET_SUBLEVEL} -gt ${LATEST_SUBLEVEL} ]]; then
-        report_error "${CURRENT_VERSION} is the latest!\n"
-    fi
+    [[ ${TARGET_SUBLEVEL} -le ${CURRENT_SUBLEVEL} ]] && die "${TARGET_VERSION} is already present in ${CURRENT_VERSION}!"
+    [[ ${TARGET_SUBLEVEL} -gt ${LATEST_SUBLEVEL} ]] && die "${CURRENT_VERSION} is the latest!"
+    [[ ${CURRENT_SUBLEVEL} -eq 0 ]] && CURRENT_VERSION=${CURRENT_MAJOR_VERSION}
 
     RANGE=v${CURRENT_VERSION}..v${TARGET_VERSION}
 
@@ -249,7 +237,7 @@ function update_to_target_version() {
     case ${UPDATE_METHOD} in
         "cherry-pick")
             if ! git cherry-pick "${RANGE}"; then
-                report_error "Cherry-pick needs manual intervention! Resolve conflicts then run:
+                die "Cherry-pick needs manual intervention! Resolve conflicts then run:
 
 git add . && git cherry-pick --continue"
             else
@@ -257,8 +245,8 @@ git add . && git cherry-pick --continue"
             fi ;;
 
         "merge")
-            if ! GIT_MERGE_VERBOSITY=1 git merge --no-edit v"${TARGET_VERSION}"; then
-                report_error "Merge needs manual intervention!
+            if ! GIT_MERGE_VERBOSITY=1 git merge --no-edit "v${TARGET_VERSION}"; then
+                die "Merge needs manual intervention!
 
 Resolve conflicts then run git merge --continue!"
             else
