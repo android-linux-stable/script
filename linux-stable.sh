@@ -24,6 +24,7 @@ GRN="\033[01;32m"
 RED="\033[01;31m"
 RST="\033[0m"
 YLW="\033[01;33m"
+branch=$(git branch | grep \* | cut -d ' ' -f2)
 
 
 # Alias for echo to handle escape codes like colors
@@ -232,6 +233,9 @@ function generate_versions() {
     echo
 }
 
+function tag_logs() {
+	git log --oneline --pretty=format:'        %s' v${CURRENT_VERSION}..v${TARGET_VERSION}
+}
 
 function update_to_target_version() {
     case ${UPDATE_METHOD} in
@@ -245,12 +249,14 @@ git add . && git cherry-pick --continue"
             fi ;;
 
         "merge")
-            if ! GIT_MERGE_VERBOSITY=1 git merge --no-edit "v${TARGET_VERSION}"; then
+            if ! GIT_MERGE_VERBOSITY=1 git merge --edit -m "Merge ${TARGET_VERSION} into ${branch}" -m "Changes in ${TARGET_VERSION}: ($(git status | grep commits | cut -d ' ' -f8-9 | head -n1 | sed 's/commits./commits/'))" -m "$(tag_logs)" "v${TARGET_VERSION}" --no-edit; then
                 die "Merge needs manual intervention!
 
 Resolve conflicts then run git merge --continue!"
             else
                 header "${TARGET_VERSION} MERGED CLEANLY!" "${GRN}"
+		git commit -q --amend -m "Merge ${TARGET_VERSION} into ${branch}" -m "Changes in ${TARGET_VERSION}: ($(git status | grep commits | cut -d ' ' -f8-9 | head -n1 | sed 's/commits./commits/'))" -m "$(tag_logs)" --no-edit
+		
             fi ;;
     esac
 }
