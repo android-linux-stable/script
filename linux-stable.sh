@@ -248,7 +248,7 @@ git add . && git cherry-pick --continue"
             if ! GIT_MERGE_VERBOSITY=1 git merge --no-edit "v${TARGET_VERSION}"; then
                 die "Merge needs manual intervention!
 
-Resolve conflicts then run git merge --continue!"
+Resolve conflicts then run git commit!"
             else
                 header "${TARGET_VERSION} MERGED CLEANLY!" "${GRN}"
             fi ;;
