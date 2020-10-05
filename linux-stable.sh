@@ -189,7 +189,7 @@ function generate_versions() {
     header "Calculating versions"
 
     # Full kernel version
-    CURRENT_VERSION=$(make kernelversion)
+    CURRENT_VERSION=$(make kernelversion O=)
     # First two numbers (3.4 | 3.10 | 3.18 | 4.4)
     CURRENT_MAJOR_VERSION=$(echo "${CURRENT_VERSION}" | cut -f 1,2 -d .)
     # Last number
